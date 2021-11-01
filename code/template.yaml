@@ -1,0 +1,339 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Sample SAM Template for lambda-msk
+
+Parameters:
+  PcaArn:
+    Type: String
+    AllowedPattern: >-
+      arn:aws:acm-pca:[us\-east\-1|us\-east\-2|eu\-west\-1]{9}:\d{12}:certificate-authority\/[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}|^$
+    ConstraintDescription: Not a valid ACM PCA ARN
+
+Mappings:
+  SubnetConfig:
+      VPC:
+        CIDR: '192.163.0.0/16'
+      PublicOne:
+        CIDR: '192.163.1.0/24'
+      PublicTwo:
+        CIDR: '192.163.2.0/24'
+      PrivateSubnetMSKOne:
+        CIDR: '192.163.3.0/24'
+      PrivateSubnetMSKTwo:
+        CIDR: '192.163.4.0/24'
+
+Resources:
+##########################
+#CREATE VPC
+##########################
+
+  PubPrivateVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !FindInMap ['SubnetConfig', 'VPC', 'CIDR']
+
+  ## SUBNETS     
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref PubPrivateVPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !FindInMap ['SubnetConfig', 'PublicTwo', 'CIDR']
+      MapPublicIpOnLaunch: true
+  
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref PubPrivateVPC
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      CidrBlock: !FindInMap ['SubnetConfig', 'PublicOne', 'CIDR']
+      MapPublicIpOnLaunch: true
+  
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref PubPrivateVPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !FindInMap ['SubnetConfig', 'PrivateSubnetMSKOne', 'CIDR']
+      MapPublicIpOnLaunch: false
+  
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref PubPrivateVPC
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      CidrBlock: !FindInMap ['SubnetConfig', 'PrivateSubnetMSKTwo', 'CIDR']
+      MapPublicIpOnLaunch: false
+  
+  ## INTERNET GATEWAY
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+  
+  GatewayToInternet:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref PubPrivateVPC
+      InternetGatewayId: !Ref InternetGateway
+  
+  ## PUBLIC ROUTING
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref PubPrivateVPC
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayToInternet
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+  
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: GatewayToInternet
+    Properties:
+      Domain: vpc
+
+  NatGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: GatewayToInternet
+    Properties:
+      Domain: vpc
+
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+  
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref PubPrivateVPC
+
+  DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref PubPrivateVPC
+
+  DefaultPrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway2
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateSubnet2
+##########################
+# CREATE SECURITY GROUP FOR MSK CLUSTER
+##########################
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable Lambda access
+      VpcId: !Ref PubPrivateVPC
+
+
+  MSKLambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: MSK Security Group
+      VpcId: !Ref PubPrivateVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 2181
+        ToPort: 2181
+        SourceSecurityGroupId: !GetAtt LambdaSecurityGroup.GroupId
+      - IpProtocol: tcp
+        FromPort: 9094
+        ToPort: 9094
+        SourceSecurityGroupId: !GetAtt LambdaSecurityGroup.GroupId
+      - IpProtocol: tcp
+        FromPort: 9092
+        ToPort: 9092
+        SourceSecurityGroupId: !GetAtt LambdaSecurityGroup.GroupId
+##########################
+# Allows Lambda service to poll MSK
+##########################
+  SelfReferencingSecurityIngress: 
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref MSKLambdaSecurityGroup
+      IpProtocol: tcp
+      FromPort: 9094
+      ToPort: 9094
+      SourceSecurityGroupId: !GetAtt MSKLambdaSecurityGroup.GroupId
+
+  MSKCloudwatchLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties: 
+      LogGroupName: !Join
+                    - '/'
+                    - - 'msk/cluster'
+                      - !Ref 'AWS::StackName'
+      RetentionInDays: 7
+
+##########################
+# CREATE MSK CLUSTER
+##########################
+  MSKCluster:
+    Type: AWS::MSK::Cluster
+    Properties: 
+      BrokerNodeGroupInfo: 
+        ClientSubnets: [!Ref 'PrivateSubnet1', !Ref 'PrivateSubnet2',]
+        InstanceType: kafka.m5.large
+        SecurityGroups: [!GetAtt MSKLambdaSecurityGroup.GroupId]
+        StorageInfo: 
+          EBSStorageInfo:
+            VolumeSize: 1000
+      ClusterName: !Join
+                    - '-'
+                    - - 'MSKCluster'
+                      - !Ref 'AWS::StackName'
+      KafkaVersion: 2.8.0
+      NumberOfBrokerNodes: 2
+      ClientAuthentication:
+        Tls:
+          CertificateAuthorityArnList:
+            - !Ref PcaArn
+      EncryptionInfo:
+        EncryptionInTransit:
+          ClientBroker: TLS_PLAINTEXT
+          InCluster: true
+      EnhancedMonitoring: DEFAULT
+      LoggingInfo: 
+        BrokerLogs: 
+          CloudWatchLogs:
+            Enabled: true
+            LogGroup: !Ref MSKCloudwatchLogGroup
+
+##########################
+# CREATE PUBLISHER
+##########################
+  MSKProducerLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${MSKProducerLambdaFunction}"
+      RetentionInDays: 7
+
+  MSKConsumerLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${MSKConsumerLambdaFunction}"
+      RetentionInDays: 7
+
+  MSKProducerLambdaFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: ./producer
+      Timeout: 3
+      Handler: producer.handler
+      Runtime: nodejs14.x
+      Tracing: Active
+      Tags:
+          project: lambda-mks
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds: 
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+
+      Policies:
+      - Statement:
+        - Sid: AWSLambdaVPCAccessExecutionRole
+          Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            - ec2:CreateNetworkInterface
+            - ec2:DescribeNetworkInterfaces
+            - ec2:DeleteNetworkInterface
+          Resource: "*"
+##########################
+# CREATE CONSUMER
+##########################
+  ConsumerLambdaFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaMSKExecutionRole
+      Policies:
+        - PolicyName: SecretAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: "SecretsManager:DescribeSecret"
+                Resource: "*"
+
+  MSKConsumerLambdaFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: ./consumer
+      Timeout: 3
+      Handler: consumer.handler
+      Runtime: nodejs14.x
+      Tracing: Active
+      Role : !GetAtt ConsumerLambdaFunctionRole.Arn
+      Tags:
+          project: lambda-mks
+
+Outputs:
+  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
+  # Find out more about other implicit resources you can reference within SAM
+  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
+
+  MSKProducerLambdaFunctionName:
+    Description: "MSK producer Lambda Function ARN"
+    Value: !Ref MSKProducerLambdaFunction
+  MSKConsumerLambdaFunctionName:
+    Description: "MSK consumer Lambda Function ARN"
+    Value: !Ref MSKConsumerLambdaFunction
+  MSKCluster:
+    Description: "MSK Cluster"
+    Value: !Ref MSKCluster

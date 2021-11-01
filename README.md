@@ -1,11 +1,12 @@
-## My Project
+# Lambda Support for MSK mTLS authentication
 
-TODO: Fill this README out!
+This repo contains code for setting up AWS Lambda as a consumer of Amazon MSK cluster using mTLS authentication.
+There is an associated blog post to learn more about the integration.
 
-Be sure to:
 
-* Change the title in this README
-* Edit your repository description on GitHub
+## Requirements
+
+* AWS CLI already configured with Administrator permission
 
 ## Security
 

@@ -1,0 +1,14 @@
+{
+    "name": "msk-producer",
+    "version": "1.0.0",
+    "description": "Produce message to MSK",
+    "main": "producer.js",
+    "repository": "",
+    "author": "Ramadoss",
+    "license": "MIT-0",
+    "dependencies": {
+        "fs": "0.0.1-security",
+        "kafkajs": "^1.15.0",
+        "optional": "^0.1.4"
+    }
+}

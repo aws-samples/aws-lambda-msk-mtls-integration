@@ -1,0 +1,11 @@
+{
+    "name": "msk-consumer",
+    "version": "1.0.0",
+    "description": "Process messages from MSK",
+    "main": "consumer.js",
+    "repository": "",
+    "author": "Ramadoss",
+    "license": "MIT-0",
+    "dependencies": {
+    }
+}
