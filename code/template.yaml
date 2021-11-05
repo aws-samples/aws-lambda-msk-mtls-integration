@@ -234,7 +234,7 @@ Resources:
             - !Ref PcaArn
       EncryptionInfo:
         EncryptionInTransit:
-          ClientBroker: TLS_PLAINTEXT
+          ClientBroker: TLS
           InCluster: true
       EnhancedMonitoring: DEFAULT
       LoggingInfo: 
@@ -308,7 +308,7 @@ Resources:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
-                Action: "SecretsManager:DescribeSecret"
+                Action: "SecretsManager:GetSecretValue"
                 Resource: "*"
 
   MSKConsumerLambdaFunction:
