@@ -3,7 +3,7 @@
 You can enable client authentication on their Amazon Managed Streaming Kafka (MSK) clusters in order to ensure that only trusted clients are able to connect to their Kafka brokers. When creating an event source mapping between a Lambda function and an MSK cluster or Kafka cluster, You can provide the client certificate, private key as AWS Secret Manager secret ARN
 
 This repo contains code for setting up AWS Lambda as a consumer of Amazon MSK cluster using mTLS authentication.
-There is an associated [blog post]() to learn more about the integration and for a step by step guidance for set up.
+Follow the [blog post](https://aws.amazon.com/blogs/compute/introducing-mutual-tls-authentication-for-amazon-msk-as-an-event-source/) to learn more about the integration and for a step by step guidance for set up.
 
 
 ## Requirements
