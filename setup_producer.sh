@@ -16,7 +16,3 @@ BOOTSTRAP_BROKERS=$(aws kafka get-bootstrap-brokers --cluster-arn $CLUSTER_ARN -
 echo "bootstrapservers: $BOOTSTRAP_BROKERS"
 
 aws lambda update-function-configuration --function-name $PRODUCER_FUNCTION_NAME --environment '{"Variables":{"KAFKA_HOSTS":"'"$BOOTSTRAP_BROKERS"'"}}'
-
-cp client_cert.pem code/producer/client_cert.pem
-cp key.pem code/producer/client_key.pem
-
